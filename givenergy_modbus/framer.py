@@ -4,7 +4,7 @@ import logging
 import struct
 from typing import Callable
 
-from pymodbus.client.sync import BaseModbusClient
+from pymodbus.client import ModbusBaseClient
 from pymodbus.framer import ModbusFramer
 from pymodbus.interfaces import IModbusDecoder
 from pymodbus.pdu import ModbusPDU
@@ -113,7 +113,7 @@ class GivEnergyModbusFramer(ModbusFramer):
 
     FRAME_HEAD = ">HHHBB"  # tid(w), pid(w), length(w), uid(b), fid(b)
 
-    def __init__(self, decoder: IModbusDecoder, client: BaseModbusClient = None):
+    def __init__(self, decoder: IModbusDecoder, client: ModbusBaseClient = None):
         self._buffer = b""
         self._length = 0
         self._hsize = 0x08

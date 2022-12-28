@@ -5,7 +5,7 @@ import time as t
 from datetime import datetime, time
 from typing import Mapping, Sequence
 
-from pymodbus.client.sync import ModbusTcpClient
+from pymodbus.client import ModbusTcpClient
 
 from givenergy_modbus.modbus import GivEnergyModbusTcpClient
 from givenergy_modbus.model.plant import Plant

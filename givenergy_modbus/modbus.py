@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from pymodbus.client.sync import ModbusTcpClient
+from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusIOException
 
 from givenergy_modbus.decoder import GivEnergyResponseDecoder
