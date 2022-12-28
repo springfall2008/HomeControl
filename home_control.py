@@ -20,11 +20,13 @@ HOME_BATTERY_THRESHOLD_HIGH = 97
 HOME_BATTERY_THRESHOLD_LOW = 87
 CAR_BATTERY_MAX = 90
 CAR_CHARGE_AMPS = 8
+CAR_CHARGE_AMPS_MIN = 2
 DEFAULT_CHARGE_AMPS = 64
 HOME_LAT = 0
 HOME_LONG = 0
-
 WAIT_TIME = 60
+MAP_URL = "http://maps.google.com/maps?z=12&t=m&q=loc:%f+%f"
+
 def signal_handler(sig, frame):
     print('You pressed Ctrl+C!')
     sys.exit(0)
@@ -80,7 +82,7 @@ def main():
             grid_export = p.inverter.p_grid_out
             spare_power = grid_export - battery_power
 
-            print("   Battery is at %2.0f%% - battery power %d solar %d house %d grid %d - spare power %d" % (battery_per, battery_power, solar, load, grid_export, spare_power))
+            print("   Home battery is at %2.0f%% - battery power %d solar %d house %d grid %d - spare power %d" % (battery_per, battery_power, solar, load, grid_export, spare_power))
 
             # Get the car's status
             my_car.get_vehicle_summary()
@@ -88,11 +90,13 @@ def main():
             car_battery = my_car['charge_state']['battery_level']
             car_charging_state = my_car['charge_state']['charging_state']
 
+            print("   Car: " + my_car['display_name'] + ' last seen ' + my_car.last_seen() + ' at ' + str(car_battery) + '% SoC' + ' Charge state ' + car_charging_state)
+
             # Update car location if the data is available
             if 'latitude' in car_data['drive_state']:
-                is_home = is_at_home(car_data['drive_state']['latitude'], car_data['drive_state']['longitude'])
-
-            print("   Car: " + my_car['display_name'] + ' last seen ' + my_car.last_seen() + ' at ' + str(car_battery) + '% SoC' + ' Charge state ' + car_charging_state)
+                latitude, longitude = car_data['drive_state']['latitude'], car_data['drive_state']['longitude']
+                is_home = is_at_home(latitude, longitude)
+                print("   Car location: %f, %f" % (latitude, longitude) + " url " + MAP_URL % (latitude, longitude))
 
             if time_now.hour >= START_HOUR and time_now.hour < STOP_HOUR:
                 print("   Within the time window %d-%d" % (START_HOUR, STOP_HOUR))
@@ -146,7 +150,7 @@ def main():
                 my_car.sync_wake_up()
                 is_home = is_at_home(car_data['drive_state']['latitude'], car_data['drive_state']['longitude'])
                 if (is_home):
-                    print("   === Starting the car charging ===")
+                    print("   ^ Starting the car charging.")
                     my_car.command('CHARGING_AMPS', charging_amps=charging_amps)
                     my_car.command('CHANGE_CHARGE_LIMIT', percent=CAR_BATTERY_MAX)
                     my_car.command('START_CHARGE')
@@ -158,7 +162,7 @@ def main():
                 my_car.sync_wake_up()
                 is_home = is_at_home(car_data['drive_state']['latitude'], car_data['drive_state']['longitude'])
                 if (is_home):
-                    print("   === Stopping car the charging ===")
+                    print("   ^ Stopping car the charging.")
                     my_car.command('STOP_CHARGE')
                     my_car.command('CHARGING_AMPS', charging_amps=DEFAULT_CHARGE_AMPS)
                 else:
@@ -166,13 +170,13 @@ def main():
                 car_charging = False
             elif car_charging:
                 # Adjust car charging amps
-                if (spare_power < 0 and charging_amps > 1):
+                if (spare_power < 0 and charging_amps > CAR_CHARGE_AMPS_MIN):
                     charging_amps -= 1
                     my_car.sync_wake_up()
                     my_car.command('CHARGING_AMPS', charging_amps=charging_amps)
-                    print("   Adjusting down car charging amps to %d based on spare_power" % charging_amps)
+                    print("   ^ Adjusting down car charging amps to %d based on spare_power" % charging_amps)
                 elif (spare_power > 0 and charging_amps < 32):
-                    print("   Adjusting up car charging amps to %d based on spare_power" % charging_amps)
+                    print("   ^ Adjusting up car charging amps to %d based on spare_power" % charging_amps)
                     charging_amps += 1
                     my_car.sync_wake_up()
                     my_car.command('CHARGING_AMPS', charging_amps=charging_amps)
