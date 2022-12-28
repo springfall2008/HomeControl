@@ -40,7 +40,7 @@ class GivEnergyClient:
         """Reload all inverter data from the device."""
         for register, base_registers in pages.items():
             for base_register in base_registers:
-                for retry in range(0, 10):
+                for retry in range(0, 20):
                     data = self.modbus_client.read_registers(register, base_register, 60, slave_address=slave_address)
                     if data:
                         register_cache.set_registers(register, data)
