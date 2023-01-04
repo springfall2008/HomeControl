@@ -4,6 +4,7 @@ import signal
 import sys
 import os
 import argparse
+import yaml
 
 from os.path import dirname
 from datetime import datetime
@@ -14,25 +15,33 @@ from givenergy_modbus.model.inverter import Inverter
 from givenergy_modbus.model.plant import Plant
 import teslapy
 
-START_HOUR = 10
-STOP_HOUR = 18
-HOME_BATTERY_THRESHOLD_HIGH = 97
-HOME_BATTERY_THRESHOLD_LOW = 87
-CAR_BATTERY_MAX = 90
-CAR_CHARGE_AMPS = 8
-CAR_CHARGE_AMPS_MIN = 2
-DEFAULT_CHARGE_AMPS = 64
-HOME_LAT = 0
-HOME_LONG = 0
-WAIT_TIME = 60
-MAP_URL = "http://maps.google.com/maps?z=12&t=m&q=loc:%f+%f"
+# Default configuration - overriden by YML
+CONFIG = {
+    'START_HOUR' : 10,
+    'STOP_HOUR' : 18,
+    'HOME_BATTERY_THRESHOLD_HIGH' : 97,
+    'HOME_BATTERY_THRESHOLD_LOW' : 87,
+    'CAR_BATTERY_MAX' : 90,
+    'CAR_CHARGE_AMPS' : 8,
+    'CAR_CHARGE_AMPS_MIN' : 2,
+    'DEFAULT_CHARGE_AMPS' : 64,
+    'HOME_LAT' : 0,
+    'HOME_LONG' : 0,
+    'WAIT_TIME' : 60,
+    'MAP_URL' : "http://maps.google.com/maps?z=12&t=m&q=loc:%f+%f",
+    'TESLA_EMAIL' : "user@tesla.com",
+    'GIVENERGY_IP' : "192.168.0.0"
+}
 
 def signal_handler(sig, frame):
     print('You pressed Ctrl+C!')
     sys.exit(0)
 
+"""
+Is the car at home?
+"""
 def is_at_home(lat, long):
-    dif = abs(HOME_LAT - lat) + abs(HOME_LONG - long)
+    dif = abs(CONFIG['HOME_LAT'] - lat) + abs(CONFIG['HOME_LONG'] - long)
     if (dif < 0.01):
         return True
     else:
@@ -40,17 +49,51 @@ def is_at_home(lat, long):
 
 signal.signal(signal.SIGINT, signal_handler)
 
-def main():
-    global HOME_LAT, HOME_LONG
+"""
+Parse args and read the config
+"""
+def parse_args():
+    global CONFIG
 
     parser = argparse.ArgumentParser(description='Home battery controller')
-    parser.add_argument('longitude', help='Home longitude')
-    parser.add_argument('latitude', help='Home latitude')
+    parser.add_argument('config', help='yml configuration file name')
+    for item in CONFIG:
+        parser.add_argument('--' + item, action='store', required=False, default=None)
     args = parser.parse_args()
-    HOME_LAT=float(args.latitude)
-    HOME_LONG=float(args.longitude)
 
-    with teslapy.Tesla('tdlj@tdlj.net', retry=3, timeout=15) as tesla:
+    # Read config and override defaults
+    with open(args.config, 'r') as fhan:
+        yconfig = yaml.safe_load(fhan)
+        for item in yconfig:
+            if item not in CONFIG:
+                print("ERROR: Bad configuration option in YML %s does not exist" % item)
+                return(1)
+            CONFIG[item] = yconfig[item]
+
+
+    # Command line overrides
+    for item in CONFIG:
+        if item in args:
+            value = getattr(args, item)
+            if value:
+                if isinstance(CONFIG[item], bool):
+                    CONFIG[item] = bool(value)
+                elif isinstance(CONFIG[item], (int, float)):
+                    CONFIG[item] = float(value)
+                else:
+                    CONFIG[item] = value
+
+    # Show configuration
+    print(CONFIG)
+
+"""
+MAIN
+"""
+def main():
+    global CONFIG
+
+    parse_args()
+    with teslapy.Tesla(CONFIG['TESLA_EMAIL'], retry=3, timeout=15) as tesla:
 
         # Wake the car up to find out it's location and other-data on the first iteration
         vehicles = tesla.vehicle_list()
@@ -58,14 +101,14 @@ def main():
         my_car.sync_wake_up()
         car_data = my_car.get_vehicle_data()
 
-        client = GivEnergyClient(host="192.168.0.20")
+        client = GivEnergyClient(host=CONFIG['GIVENERGY_IP'])
         p = Plant(number_batteries=1)
         #client.set_battery_power_reserve(5)
         client.refresh_plant(p, full_refresh=True)
     
         # Initial state
         car_charging = False
-        charging_amps = CAR_CHARGE_AMPS
+        charging_amps = CONFIG['CAR_CHARGE_AMPS']
         is_home = False
 
         # Loop polling the battery
@@ -96,13 +139,13 @@ def main():
             if 'latitude' in car_data['drive_state']:
                 latitude, longitude = car_data['drive_state']['latitude'], car_data['drive_state']['longitude']
                 is_home = is_at_home(latitude, longitude)
-                print("   Car location: %f, %f" % (latitude, longitude) + " url " + MAP_URL % (latitude, longitude) + " home:%s" % str(is_home))
+                print("   Car location: %f, %f" % (latitude, longitude) + " url " + CONFIG['MAP_URL'] % (latitude, longitude) + " home:%s" % str(is_home))
 
-            if time_now.hour >= START_HOUR and time_now.hour < STOP_HOUR:
-                print("   Within the time window %d-%d" % (START_HOUR, STOP_HOUR))
+            if time_now.hour >= CONFIG['START_HOUR'] and time_now.hour < CONFIG['STOP_HOUR']:
+                print("   Within the time window %d-%d" % (CONFIG['START_HOUR'], CONFIG['STOP_HOUR']))
                 in_window = True
             else:
-                print("   Outside the time window %d-%d hrs" % (START_HOUR, STOP_HOUR))
+                print("   Outside the time window %d-%d hrs" % (CONFIG['START_HOUR'], CONFIG['STOP_HOUR']))
                 in_window = False
         
             if battery_power < 0:
@@ -112,11 +155,11 @@ def main():
                 print("   Home battery is discharging")
                 battery_charging = False
 
-            if battery_per >= HOME_BATTERY_THRESHOLD_HIGH:
+            if battery_per >= CONFIG['HOME_BATTERY_THRESHOLD_HIGH']:
                 print("   Home battery is above the upper threshold")
                 battery_over_threshold = True
                 battery_under_threshold = False
-            elif battery_per <= HOME_BATTERY_THRESHOLD_LOW:
+            elif battery_per <= CONFIG['HOME_BATTERY_THRESHOLD_LOW']:
                 print("   Home battery is below the lower threshold")
                 battery_over_threshold = False
                 battery_under_threshold = True
@@ -138,21 +181,21 @@ def main():
                 car_charging = False
                 print("   Car has stopped charging, likely hit the charging limit or stopped by the app")
                 my_car.sync_wake_up()
-                my_car.command('CHARGING_AMPS', charging_amps=DEFAULT_CHARGE_AMPS)
+                my_car.command('CHARGING_AMPS', charging_amps=CONFIG['DEFAULT_CHARGE_AMPS'])
             elif not battery_charging and (car_charging_state == 'Charging'):
                 if (in_window):
                     battery_charging = True
                     print("   The car is already charging in the window, starting to manage it now")
                 else:
                     print("   The car is already charging outside the window and we didn't enable it, ignoring it")
-            elif not car_charging and in_window and (spare_power > 0) and battery_over_threshold and (car_battery < CAR_BATTERY_MAX):
+            elif not car_charging and in_window and (spare_power > 0) and battery_over_threshold and (car_battery < CONFIG['CAR_BATTERY_MAX']):
                 # Start now        
                 my_car.sync_wake_up()
                 is_home = is_at_home(car_data['drive_state']['latitude'], car_data['drive_state']['longitude'])
                 if (is_home):
                     print("   ^ Starting the car charging.")
                     my_car.command('CHARGING_AMPS', charging_amps=charging_amps)
-                    my_car.command('CHANGE_CHARGE_LIMIT', percent=CAR_BATTERY_MAX)
+                    my_car.command('CHANGE_CHARGE_LIMIT', percent=CONFIG['CAR_BATTERY_MAX'])
                     my_car.command('START_CHARGE')
                     car_charging = True
                 else:
@@ -164,13 +207,13 @@ def main():
                 if (is_home):
                     print("   ^ Stopping car the charging.")
                     my_car.command('STOP_CHARGE')
-                    my_car.command('CHARGING_AMPS', charging_amps=DEFAULT_CHARGE_AMPS)
+                    my_car.command('CHARGING_AMPS', charging_amps=CONFIG['DEFAULT_CHARGE_AMPS'])
                 else:
                     print("   Car has moved away from home, won't stop charge")
                 car_charging = False
             elif car_charging:
                 # Adjust car charging amps
-                if (spare_power < 0 and charging_amps > CAR_CHARGE_AMPS_MIN):
+                if (spare_power < 0 and charging_amps > CONFIG['CAR_CHARGE_AMPS_MIN']):
                     charging_amps -= 1
                     my_car.sync_wake_up()
                     my_car.command('CHARGING_AMPS', charging_amps=charging_amps)
@@ -181,7 +224,7 @@ def main():
                     my_car.sync_wake_up()
                     my_car.command('CHARGING_AMPS', charging_amps=charging_amps)
 
-            time.sleep(WAIT_TIME)
+            time.sleep(CONFIG['WAIT_TIME'])
 
 if __name__ == "__main__":
     exit(main())
