@@ -125,7 +125,7 @@ def main():
             grid_export = p.inverter.p_grid_out
             spare_power = grid_export - battery_power
 
-            print("   Home battery is at %2.0f%% - battery power %d solar %d house %d grid %d - spare power %d" % (battery_per, battery_power, solar, load, grid_export, spare_power))
+            print("   Home battery is at %2.0f%% - battery power %dw solar %dw house %dw grid %dw - spare power %dw" % (battery_per, battery_power, solar, load, grid_export, spare_power))
 
             # Get the car's status
             my_car.get_vehicle_summary()
@@ -149,22 +149,22 @@ def main():
                 in_window = False
         
             if battery_power < 0:
-                print("   Home battery is charging")
+                print("   Home battery is charging (%dw)" % battery_power)
                 battery_charging = True
             else:
-                print("   Home battery is discharging")
+                print("   Home battery is discharging (%dw)" % battery_power)
                 battery_charging = False
 
             if battery_per >= CONFIG['HOME_BATTERY_THRESHOLD_HIGH']:
-                print("   Home battery is above the upper threshold")
+                print("   Home battery is above the upper threshold (%d%% > %d%%)" % (battery_per, CONFIG['HOME_BATTERY_THRESHOLD_HIGH']))
                 battery_over_threshold = True
                 battery_under_threshold = False
             elif battery_per <= CONFIG['HOME_BATTERY_THRESHOLD_LOW']:
-                print("   Home battery is below the lower threshold")
+                print("   Home battery is below the lower threshold (%d%% < %d%%)" % (battery_per, CONFIG['HOME_BATTERY_THRESHOLD_LOW']))
                 battery_over_threshold = False
                 battery_under_threshold = True
             else:
-                print("   Home battery is between the thresholds")
+                print("   Home battery is between the thresholds (%d%% <= %d%% <= %d%%)" % (CONFIG['HOME_BATTERY_THRESHOLD_LOW'], battery_per, CONFIG['HOME_BATTERY_THRESHOLD_HIGH']))
                 battery_over_threshold = False
                 battery_under_threshold = False
 
@@ -217,9 +217,9 @@ def main():
                     charging_amps -= 1
                     my_car.sync_wake_up()
                     my_car.command('CHARGING_AMPS', charging_amps=charging_amps)
-                    print("   ^ Adjusting down car charging amps to %d based on spare_power" % charging_amps)
+                    print("   ^ Adjusting down car charging amps to %d based on spare_power %d" % (charging_amps, spare_power))
                 elif (spare_power > 0 and charging_amps < 32):
-                    print("   ^ Adjusting up car charging amps to %d based on spare_power" % charging_amps)
+                    print("   ^ Adjusting up car charging amps to %d based on spare_power %d" % (charging_amps, spare_power))
                     charging_amps += 1
                     my_car.sync_wake_up()
                     my_car.command('CHARGING_AMPS', charging_amps=charging_amps)
