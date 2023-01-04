@@ -22,12 +22,13 @@ CONFIG = {
     'HOME_BATTERY_THRESHOLD_HIGH' : 97,
     'HOME_BATTERY_THRESHOLD_LOW' : 87,
     'CAR_BATTERY_MAX' : 90,
-    'CAR_CHARGE_AMPS' : 8,
     'CAR_CHARGE_AMPS_MIN' : 2,
+    'CAR_CHARGE_AMPS_MAX' : 10,
     'DEFAULT_CHARGE_AMPS' : 64,
     'HOME_LAT' : 0,
     'HOME_LONG' : 0,
-    'WAIT_TIME' : 60,
+    'WAIT_TIME_LONG' : 60*5,
+    'WAIT_TIME_SHORT' : 30,
     'MAP_URL' : "http://maps.google.com/maps?z=12&t=m&q=loc:%f+%f",
     'TESLA_EMAIL' : "user@tesla.com",
     'GIVENERGY_IP' : "192.168.0.0"
@@ -108,7 +109,7 @@ def main():
     
         # Initial state
         car_charging = False
-        charging_amps = CONFIG['CAR_CHARGE_AMPS']
+        charging_amps = CONFIG['CAR_CHARGE_AMPS_MIN']
         is_home = False
 
         # Loop polling the battery
@@ -120,26 +121,13 @@ def main():
             client.refresh_plant(p, full_refresh=False)
             battery_per = p.inverter.battery_percent
             battery_power = p.inverter.p_battery
+            battery_volts = p.inverter.v_battery
             load = p.inverter.p_load_demand
             solar = p.inverter.p_pv1 + p.inverter.p_pv2 
             grid_export = p.inverter.p_grid_out
             spare_power = grid_export - battery_power
 
-            print("   Home battery is at %2.0f%% - battery power %dw solar %dw house %dw grid %dw - spare power %dw" % (battery_per, battery_power, solar, load, grid_export, spare_power))
-
-            # Get the car's status
-            my_car.get_vehicle_summary()
-            car_data = my_car.get_vehicle_data()
-            car_battery = my_car['charge_state']['battery_level']
-            car_charging_state = my_car['charge_state']['charging_state']
-
-            print("   Car: " + my_car['display_name'] + ' last seen ' + my_car.last_seen() + ' at ' + str(car_battery) + '% SoC' + ' Charge state ' + car_charging_state)
-
-            # Update car location if the data is available
-            if 'latitude' in car_data['drive_state']:
-                latitude, longitude = car_data['drive_state']['latitude'], car_data['drive_state']['longitude']
-                is_home = is_at_home(latitude, longitude)
-                print("   Car location: %f, %f" % (latitude, longitude) + " url " + CONFIG['MAP_URL'] % (latitude, longitude) + " home:%s" % str(is_home))
+            print("   Home battery is at %2.0f%% (%2.2fv) - battery power %dw solar %dw house %dw grid %dw - spare power %dw" % (battery_per, battery_volts, battery_power, solar, load, grid_export, spare_power))
 
             if time_now.hour >= CONFIG['START_HOUR'] and time_now.hour < CONFIG['STOP_HOUR']:
                 print("   Within the time window %d-%d" % (CONFIG['START_HOUR'], CONFIG['STOP_HOUR']))
@@ -168,6 +156,27 @@ def main():
                 battery_over_threshold = False
                 battery_under_threshold = False
 
+ 
+            # Home battery maybe in region, refresh the car
+            if car_charging or (in_window and (spare_power > 0) and battery_over_threshold):
+                refresh_car = True
+            else:
+                refresh_car = False
+                
+            # Get the car's status
+            my_car.get_vehicle_summary()
+            if (refresh_car):
+                car_data = my_car.get_vehicle_data()
+            car_battery = my_car['charge_state']['battery_level']
+            car_charging_state = my_car['charge_state']['charging_state']
+
+            print("   Car: " + my_car['display_name'] + ' last seen ' + my_car.last_seen() + ' at ' + str(car_battery) + '% SoC' + ' Charge state ' + car_charging_state)
+
+            # Update car location if the data is available
+            if 'latitude' in car_data['drive_state']:
+                latitude, longitude = car_data['drive_state']['latitude'], car_data['drive_state']['longitude']
+                is_home = is_at_home(latitude, longitude)
+                print("   Car location: %f, %f" % (latitude, longitude) + " url " + CONFIG['MAP_URL'] % (latitude, longitude) + " home:%s" % str(is_home))
          
             if (not is_home):
               print("   Car does not appear to be at home, won't manage it")
@@ -218,13 +227,18 @@ def main():
                     my_car.sync_wake_up()
                     my_car.command('CHARGING_AMPS', charging_amps=charging_amps)
                     print("   ^ Adjusting down car charging amps to %d based on spare_power %d" % (charging_amps, spare_power))
-                elif (spare_power > 0 and charging_amps < 32):
+                elif (spare_power > 0 and charging_amps < CONFIG['CAR_CHARGE_AMPS_MAX']):
                     print("   ^ Adjusting up car charging amps to %d based on spare_power %d" % (charging_amps, spare_power))
                     charging_amps += 1
                     my_car.sync_wake_up()
                     my_car.command('CHARGING_AMPS', charging_amps=charging_amps)
 
-            time.sleep(CONFIG['WAIT_TIME'])
+            if car_charging:
+                print("   Short sleep for %d seconds..." % CONFIG['WAIT_TIME_SHORT'])
+                time.sleep(CONFIG['WAIT_TIME_SHORT'])
+            else:
+                print("   Long sleep for %d seconds..." % CONFIG['WAIT_TIME_LONG'])
+                time.sleep(CONFIG['WAIT_TIME_LONG'])
 
 if __name__ == "__main__":
     exit(main())
