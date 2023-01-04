@@ -58,7 +58,7 @@ def main():
         my_car.sync_wake_up()
         car_data = my_car.get_vehicle_data()
 
-        client = GivEnergyClient(host="192.168.0.141")
+        client = GivEnergyClient(host="192.168.0.20")
         p = Plant(number_batteries=1)
         #client.set_battery_power_reserve(5)
         client.refresh_plant(p, full_refresh=True)
@@ -96,7 +96,7 @@ def main():
             if 'latitude' in car_data['drive_state']:
                 latitude, longitude = car_data['drive_state']['latitude'], car_data['drive_state']['longitude']
                 is_home = is_at_home(latitude, longitude)
-                print("   Car location: %f, %f" % (latitude, longitude) + " url " + MAP_URL % (latitude, longitude))
+                print("   Car location: %f, %f" % (latitude, longitude) + " url " + MAP_URL % (latitude, longitude) + " home:%s" % str(is_home))
 
             if time_now.hour >= START_HOUR and time_now.hour < STOP_HOUR:
                 print("   Within the time window %d-%d" % (START_HOUR, STOP_HOUR))
