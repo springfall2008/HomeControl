@@ -21,8 +21,8 @@ CONFIG = {
     'STOP_HOUR' : 18,
     'HOME_BATTERY_THRESHOLD_HIGH' : 97,
     'HOME_BATTERY_THRESHOLD_LOW' : 87,
-    'CAR_BATTERY_MAX' : 90,
-    'CAR_CHARGE_AMPS_MIN' : 2,
+    'CAR_BATTERY_MAX' : 95,
+    'CAR_CHARGE_AMPS_MIN' : 5,
     'CAR_CHARGE_AMPS_MAX' : 10,
     'DEFAULT_CHARGE_AMPS' : 64,
     'HOME_LAT' : 0,
@@ -144,11 +144,11 @@ def main():
                 battery_charging = False
 
             if battery_per >= CONFIG['HOME_BATTERY_THRESHOLD_HIGH']:
-                print("   Home battery is above the upper threshold (%d%% > %d%%)" % (battery_per, CONFIG['HOME_BATTERY_THRESHOLD_HIGH']))
+                print("   Home battery is above the upper threshold (%d%% >= %d%%)" % (battery_per, CONFIG['HOME_BATTERY_THRESHOLD_HIGH']))
                 battery_over_threshold = True
                 battery_under_threshold = False
             elif battery_per <= CONFIG['HOME_BATTERY_THRESHOLD_LOW']:
-                print("   Home battery is below the lower threshold (%d%% < %d%%)" % (battery_per, CONFIG['HOME_BATTERY_THRESHOLD_LOW']))
+                print("   Home battery is below the lower threshold (%d%% <= %d%%)" % (battery_per, CONFIG['HOME_BATTERY_THRESHOLD_LOW']))
                 battery_over_threshold = False
                 battery_under_threshold = True
             else:
