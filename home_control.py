@@ -186,14 +186,14 @@ def main():
             elif (car_charging_state == 'Disconnected'):
                 print("   Car charger is not connected, please connect it")
                 car_charging = False
-            elif battery_charging and (car_charging_state == 'Complete' or car_charging_state == 'Stopped'):
+            elif car_charging and (car_charging_state == 'Complete' or car_charging_state == 'Stopped'):
                 car_charging = False
                 print("   Car has stopped charging, likely hit the charging limit or stopped by the app")
                 my_car.sync_wake_up()
                 my_car.command('CHARGING_AMPS', charging_amps=CONFIG['DEFAULT_CHARGE_AMPS'])
-            elif not battery_charging and (car_charging_state == 'Charging'):
+            elif not car_charging and (car_charging_state == 'Charging'):
                 if (in_window):
-                    battery_charging = True
+                    car_charging = True
                     print("   The car is already charging in the window, starting to manage it now")
                 else:
                     print("   The car is already charging outside the window and we didn't enable it, ignoring it")
